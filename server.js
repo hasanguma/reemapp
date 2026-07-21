@@ -1,5 +1,5 @@
 // ==============================================
-// server.js - v4.1 (Maximum Robustness for Gemini 404)
+// server.js - v4.2 (Stable API v1 & Robust Fallback)
 // ==============================================
 
 require('dotenv').config();
@@ -36,13 +36,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const REEM_SYSTEM_INSTRUCTION = `أنتِ "ريم"، مساعدة ذكية وودودة. تجيبين بالعربية فقط. اسمك ريم. لا تذكري جوجل أو جيمناي.`;
 
-// قائمة بجميع أسماء الموديلات الممكنة لتجاوز خطأ 404
+// قائمة الموديلات المستقرة (v1)
 const MODELS_TO_TRY = [
   'gemini-1.5-flash',
-  'gemini-1.5-flash-latest',
   'gemini-1.5-pro',
-  'gemini-2.0-flash-exp',
-  'gemini-pro'
+  'gemini-1.0-pro'
 ];
 
 async function generateWithFallback(parts) {
@@ -50,12 +48,14 @@ async function generateWithFallback(parts) {
 
   for (const modelName of MODELS_TO_TRY) {
     try {
-      console.log(`🔍 Attempting with model: ${modelName}...`);
+      console.log(`🔍 Attempting with model: ${modelName} (API v1)...`);
       const client = getNextGeminiClient();
+
+      // إجبار استخدام الإصدار المستقر v1 بدلاً من v1beta لتجنب خطأ 404
       const model = client.getGenerativeModel({
         model: modelName,
         systemInstruction: REEM_SYSTEM_INSTRUCTION,
-      });
+      }, { apiVersion: 'v1' });
 
       const result = await model.generateContent(parts);
       const response = await result.response;
@@ -64,11 +64,11 @@ async function generateWithFallback(parts) {
     } catch (err) {
       console.warn(`⚠️ Model ${modelName} failed:`, err.message);
       lastError = err;
-      // إذا كان الخطأ 404 (غير موجود) أو 400 (غير مدعوم)، نجرب الموديل التالي
+
+      // إذا كان الخطأ 404 أو 400 (موديل غير مدعوم في هذا الإصدار)، نجرب التالي
       if (err.message.includes('404') || err.message.includes('not found') || err.message.includes('supported')) {
         continue;
       }
-      // إذا كان الخطأ في المفتاح أو الحصة (429)، نتوقف
       break;
     }
   }
@@ -91,7 +91,10 @@ app.post('/api/chat', async (req, res) => {
     res.json({ success: true, reply: response.text() });
   } catch (error) {
     console.error('Final Gemini Error:', error.message);
-    res.status(500).json({ success: false, error: 'تعذّر الاتصال بـ Gemini. تأكدي من صلاحية المفتاح ودعمه للموديلات.' });
+    res.status(500).json({
+      success: false,
+      error: 'تعذّر الاتصال بخدمة Gemini. تأكدي من أن المفتاح يدعم الموديلات المستقرة (1.5 Flash).'
+    });
   }
 });
 
@@ -115,4 +118,4 @@ app.post('/api/remove-bg', upload.single('image'), async (req, res) => {
 
 app.post('/api/reset', (req, res) => res.json({ success: true }));
 
-app.listen(PORT, () => console.log(`✅ Server v4.1 running on port ${PORT}`));
+app.listen(PORT, () => console.log(`✅ Server v4.2 (Stable v1) running on port ${PORT}`));
