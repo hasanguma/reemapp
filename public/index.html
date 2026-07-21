@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>ريم | مساعدك الذكي</title>
+
+  <!-- إعدادات PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#1a73e8" />
+  <link rel="icon" href="icons/favicon-32.png" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ريم" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="description" content="ريم، مساعدتك الذكية الودودة - تفهم النصوص والصور، وترسم ما تتخيلينه." />
+
+  <!-- تطبيق الوضع الليلي فوراً قبل الرسم لمنع الوميض (FOUC) -->
+  <script>
+    try {
+      var savedTheme = localStorage.getItem('reem_theme');
+      if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    } catch (e) {}
+  </script>
+
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+  <!-- مكتبات تنسيق Markdown وتعقيمه (لعرض ردود منسّقة بأمان) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.5/purify.min.js"></script>
+  <!-- مكتبة الأيقونات الحديثة -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body>
+
+  <!-- ============================================== -->
+  <!-- شاشة افتتاحية (Splash Screen) - تُخفى بعد التحميل -->
+  <!-- ============================================== -->
+  <div id="splashScreen" class="splash-screen">
+    <div class="splash-logo">
+      <img src="icons/icon-512.png" alt="ريم" />
+    </div>
+    <h1 class="splash-title">ريم</h1>
+    <p class="splash-subtitle">مساعدتك الذكية الودودة</p>
+    <div class="splash-loader"><span></span><span></span><span></span></div>
+  </div>
+
+  <div class="app-shell">
+
+    <!-- ============================================== -->
+    <!-- الشريط الجانبي (Sidebar) -->
+    <!-- ============================================== -->
+    <div id="sidebarOverlay" class="sidebar-overlay hidden"></div>
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-brand">
+          <img src="icons/icon-192.png" alt="ريم" />
+          <span>ريم ✨</span>
+        </div>
+        <button id="sidebarCloseBtn" class="icon-btn ghost" title="إغلاق القائمة">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <button id="newChatBtn" class="new-chat-btn">
+        <i data-lucide="plus-circle"></i>
+        <span>محادثة جديدة</span>
+      </button>
+
+      <div class="sidebar-section-label">
+        <i data-lucide="history"></i>
+        <span>السجل</span>
+      </div>
+      <div id="conversationList" class="conversation-list"></div>
+
+      <div class="sidebar-footer">
+        <button id="themeToggleBtn" class="sidebar-footer-btn" title="تبديل المظهر">
+          <i data-lucide="sun-moon"></i>
+          <span id="themeToggleLabel">الوضع الداكن</span>
+        </button>
+        <button id="clearAllBtn" class="sidebar-footer-btn danger" title="مسح كل المحادثات">
+          <i data-lucide="trash-2"></i>
+          <span>مسح كل المحادثات</span>
+        </button>
+      </div>
+    </aside>
+
+    <div class="app-container">
+
+      <!-- رأس التطبيق -->
+      <header class="chat-header">
+        <div class="header-info">
+          <button id="menuBtn" class="icon-btn ghost-on-header" title="القائمة الجانبية">
+            <i data-lucide="menu"></i>
+          </button>
+          <div class="avatar">
+            <img src="icons/icon-192.png" alt="ريم" />
+          </div>
+          <div class="header-text">
+            <h1>ريم</h1>
+            <span class="status">
+              <span class="status-dot"></span>
+              متصلة الآن
+            </span>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <!-- اختيار الصوت -->
+          <select id="voiceSelect" class="voice-select" title="اختيار الصوت"></select>
+          <!-- زر القراءة الصوتية التلقائية للردود -->
+          <button id="muteBtn" class="icon-btn" title="تشغيل/إيقاف القراءة الصوتية للردود">
+            <i id="muteIcon" data-lucide="volume-x"></i>
+          </button>
+          <!-- زر المكالمة الصوتية المباشرة -->
+          <button id="callBtn" class="icon-btn" title="مكالمة صوتية مباشرة" onclick="startCall()">
+            <i data-lucide="phone-call"></i>
+          </button>
+          <!-- زر تصفير المحادثة -->
+          <button id="resetBtn" class="icon-btn" title="مسح المحادثة">
+            <i data-lucide="eraser"></i>
+          </button>
+        </div>
+      </header>
+
+      <!-- منطقة عرض الرسائل -->
+      <main id="chatWindow" class="chat-window"></main>
+
+      <!-- مؤشر الكتابة / الرسم -->
+      <div id="typingIndicator" class="typing-indicator hidden">
+        <div class="message-avatar"><img src="icons/icon-192.png" alt="ريم" /></div>
+        <div class="typing-bubble">
+          <span id="typingText" class="typing-text"></span>
+          <span class="typing-dots"><span></span><span></span><span></span></span>
+        </div>
+      </div>
+
+      <!-- تنبيه أخطاء الشبكة/الاتصال -->
+      <div id="connectionBanner" class="connection-banner hidden">
+        <i data-lucide="wifi-off"></i>
+        <span id="connectionBannerText">تعذّر الاتصال بالسيرفر، سيتم إعادة المحاولة تلقائياً 🌐</span>
+      </div>
+
+      <!-- معاينة الصورة المرفقة قبل الإرسال -->
+      <div id="imagePreviewBar" class="image-preview-bar hidden">
+        <div class="image-preview-thumb">
+          <img id="imagePreviewImg" src="" alt="الصورة المرفقة" />
+          <button id="removeImageBtn" class="remove-image-btn" title="إزالة الصورة">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <span class="image-preview-label">جاهزة للإرسال — أضيفي وصفاً أو اضغطي إرسال مباشرة</span>
+      </div>
+
+      <!-- منطقة الإدخال (تصميم Google Gemini) -->
+      <footer class="chat-input-area">
+        <input type="file" id="imageInput" accept="image/png, image/jpeg, image/webp" hidden />
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden />
+        <input type="file" id="fileInput" accept="image/png, image/jpeg, image/webp, application/pdf" hidden />
+
+        <div class="input-pill">
+          <button id="addBtn" class="pill-add-btn" title="إضافة">
+            <i data-lucide="plus"></i>
+          </button>
+
+          <textarea
+            id="userInput"
+            rows="1"
+            placeholder="اسأل ريم"
+            autocomplete="off"
+          ></textarea>
+
+          <div class="pill-action-area">
+            <button id="micBtn" class="pill-icon-btn" title="التحدث صوتياً">
+              <i data-lucide="mic"></i>
+            </button>
+            <button id="waveBtn" class="pill-icon-btn" title="مكالمة صوتية مباشرة">
+              <i data-lucide="audio-lines"></i>
+            </button>
+            <button id="sendBtn" class="pill-send-btn hidden" title="إرسال">
+              <i id="sendIcon" data-lucide="arrow-up"></i>
+            </button>
+          </div>
+        </div>
+      </footer>
+
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- القائمة السفلية المنزلقة (Bottom Sheet) عند الضغط على (+) -->
+  <!-- ============================================== -->
+  <div id="addSheetOverlay" class="sheet-overlay hidden"></div>
+  <div id="addSheet" class="bottom-sheet hidden" role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div class="sheet-grid">
+      <button id="sheetImagesBtn" class="sheet-card" type="button">
+        <span class="sheet-card-icon"><i data-lucide="image"></i></span>
+        <span class="sheet-card-label">الصور</span>
+      </button>
+      <button id="sheetCameraBtn" class="sheet-card" type="button">
+        <span class="sheet-card-icon"><i data-lucide="camera"></i></span>
+        <span class="sheet-card-label">الكاميرا</span>
+      </button>
+      <button id="sheetFilesBtn" class="sheet-card" type="button">
+        <span class="sheet-card-icon"><i data-lucide="paperclip"></i></span>
+        <span class="sheet-card-label">الملفات</span>
+      </button>
+      <button id="sheetGenerateBtn" class="sheet-card" type="button">
+        <span class="sheet-card-icon"><i data-lucide="sparkles"></i></span>
+        <span class="sheet-card-label">إنشاء صور</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- وضع المكالمة الصوتية المباشرة -->
+  <!-- ============================================== -->
+  <div id="callOverlay" class="call-overlay hidden">
+    <div class="call-content">
+      <div class="call-avatar-ring">
+        <img src="icons/icon-512.png" alt="ريم" />
+      </div>
+      <h2 class="call-title">ريم</h2>
+      <p id="callStatus" class="call-status">جاري الاتصال...</p>
+      <div id="callWave" class="call-wave">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+    <div class="call-controls">
+      <button id="callRetryBtn" class="call-control-btn call-retry-btn hidden" title="إعادة الاتصال الصوتي يدوياً">
+        <i data-lucide="refresh-cw"></i>
+      </button>
+      <button id="callMicToggleBtn" class="call-control-btn" title="كتم الميكروفون">
+        <i data-lucide="mic"></i>
+      </button>
+      <button id="endCallBtn" class="call-control-btn call-end-btn" title="إنهاء المكالمة" onclick="endCall()">
+        <i data-lucide="phone-off"></i>
+      </button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+
+  <!-- تسجيل Service Worker لتفعيل خصائص PWA (كاش + عمل جزئي دون اتصال) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch((err) => {
+          console.warn('تعذّر تسجيل Service Worker:', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "name": "reem-assistant",
+  "version": "2.0.0",
+  "description": "مساعد ذكي اسمه ريم (Reem AI Ultra) - يعتمد على Gemini API مع دعم فهم الصور، توليد الصور، مكالمة صوتية مباشرة، وتحويل النص إلى صوت",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "ai",
+    "chatbot",
+    "gemini",
+    "arabic",
+    "tts",
+    "reem"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/camera": "^8.2.1",
+    "@capacitor/cli": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/haptics": "^8.0.2",
+    "@capgo/capacitor-speech-recognition": "^8.1.7",
+    "@google/generative-ai": "^0.21.0",
+    "@imgly/background-removal-node": "^1.4.5",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "multer": "^2.2.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
