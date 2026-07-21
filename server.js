@@ -1,5 +1,5 @@
 // ==============================================
-// server.js - v4.2 (Stable API v1 & Robust Fallback)
+// server.js - v4.3 (Legacy Stability Mode)
 // ==============================================
 
 require('dotenv').config();
@@ -13,7 +13,7 @@ const { removeBackground } = require('@imgly/background-removal-node');
 const API_KEYS = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(k => k);
 
 if (API_KEYS.length === 0) {
-  console.error('❌ Error: GEMINI_API_KEY is missing from .env');
+  console.error('❌ Missing GEMINI_API_KEY');
   process.exit(1);
 }
 
@@ -26,50 +26,35 @@ function getNextGeminiClient() {
   return client;
 }
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json({ limit: '25mb' }));
+app.use(express.json({ limit: '20mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const REEM_SYSTEM_INSTRUCTION = `أنتِ "ريم"، مساعدة ذكية وودودة. تجيبين بالعربية فقط. اسمك ريم. لا تذكري جوجل أو جيمناي.`;
+// تعليمات ريم مدمجة
+const REEM_PROMPT_PREFIX = `أنتِ ريم، مساعدة ذكية وودودة. ردي بالعربية فقط وبأسلوب لطيف. لا تذكري جوجل.\nالمستخدم يسأل: `;
 
-// قائمة الموديلات المستقرة (v1)
-const MODELS_TO_TRY = [
-  'gemini-1.5-flash',
-  'gemini-1.5-pro',
-  'gemini-1.0-pro'
-];
-
-async function generateWithFallback(parts) {
+async function generateWithRobustFallback(parts) {
+  // تجربة gemini-pro أولاً لأنه الأكثر توافقاً مع كل المفاتيح
+  const models = ['gemini-pro', 'gemini-1.5-flash', 'gemini-1.0-pro'];
   let lastError;
 
-  for (const modelName of MODELS_TO_TRY) {
+  for (const m of models) {
     try {
-      console.log(`🔍 Attempting with model: ${modelName} (API v1)...`);
+      console.log(`🚀 Trying model: ${m}`);
       const client = getNextGeminiClient();
-
-      // إجبار استخدام الإصدار المستقر v1 بدلاً من v1beta لتجنب خطأ 404
-      const model = client.getGenerativeModel({
-        model: modelName,
-        systemInstruction: REEM_SYSTEM_INSTRUCTION,
-      }, { apiVersion: 'v1' });
+      const model = client.getGenerativeModel({ model: m });
 
       const result = await model.generateContent(parts);
       const response = await result.response;
-      console.log(`✅ Success with model: ${modelName}`);
-      return response;
+      return response.text();
     } catch (err) {
-      console.warn(`⚠️ Model ${modelName} failed:`, err.message);
+      console.warn(`❌ Model ${m} failed:`, err.message);
       lastError = err;
-
-      // إذا كان الخطأ 404 أو 400 (موديل غير مدعوم في هذا الإصدار)، نجرب التالي
-      if (err.message.includes('404') || err.message.includes('not found') || err.message.includes('supported')) {
-        continue;
-      }
-      break;
+      continue;
     }
   }
   throw lastError;
@@ -78,44 +63,37 @@ async function generateWithFallback(parts) {
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, image } = req.body;
-    const parts = [];
+    const combinedPrompt = REEM_PROMPT_PREFIX + (message || 'مرحباً');
+    const parts = [{ text: combinedPrompt }];
 
     if (image) {
       const match = image.match(/^data:([a-z\/+-]+);base64,(.+)$/);
       if (match) parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
     }
 
-    parts.push({ text: message || 'مرحباً' });
-
-    const response = await generateWithFallback(parts);
-    res.json({ success: true, reply: response.text() });
+    const reply = await generateWithRobustFallback(parts);
+    res.json({ success: true, reply });
   } catch (error) {
-    console.error('Final Gemini Error:', error.message);
-    res.status(500).json({
-      success: false,
-      error: 'تعذّر الاتصال بخدمة Gemini. تأكدي من أن المفتاح يدعم الموديلات المستقرة (1.5 Flash).'
-    });
+    console.error('Final Error:', error.message);
+    res.status(500).json({ success: false, error: 'حدث خطأ في الاتصال. تأكدي من صلاحية المفتاح.' });
   }
 });
 
 app.post('/api/generate-image', (req, res) => {
   const { prompt } = req.body;
-  const seed = Math.floor(Math.random() * 1000000);
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt || 'beauty')}?width=1024&height=1024&nologo=true&seed=${seed}`;
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt || 'beauty')}?width=1024&height=1024&nologo=true&seed=${Math.random()}`;
   res.json({ success: true, imageUrl });
 });
 
 app.post('/api/remove-bg', upload.single('image'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ success: false, error: 'No image' });
+    if (!req.file) return res.status(400).json({ success: false });
     const resultBlob = await removeBackground(new Blob([req.file.buffer], { type: req.file.mimetype }));
     const base64 = Buffer.from(await resultBlob.arrayBuffer()).toString('base64');
     res.json({ success: true, imageUrl: `data:image/png;base64,${base64}` });
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
+  } catch (err) { res.status(500).json({ success: false }); }
 });
 
 app.post('/api/reset', (req, res) => res.json({ success: true }));
 
-app.listen(PORT, () => console.log(`✅ Server v4.2 (Stable v1) running on port ${PORT}`));
+app.listen(PORT, () => console.log(`✅ Server v4.3 (Legacy Mode) on port ${PORT}`));
