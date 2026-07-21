@@ -600,10 +600,16 @@ function getArabicVoices() {
 function populateVoiceSelect() {
   if (!voiceSelect) return;
   const arabicVoices = getArabicVoices();
-  if (!arabicVoices.length) return;
 
   const previousValue = voiceSelect.value;
   voiceSelect.innerHTML = '';
+
+  if (!arabicVoices.length) {
+    const opt = document.createElement('option');
+    opt.textContent = 'جاري تحميل الأصوات...';
+    voiceSelect.appendChild(opt);
+    return;
+  }
 
   arabicVoices.forEach((voice) => {
     const option = document.createElement('option');
@@ -630,6 +636,12 @@ if (voiceSelect) {
 }
 
 function speak(text, onEnd) {
+  if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+    console.warn('SpeechSynthesis API not supported.');
+    if (onEnd) onEnd();
+    return;
+  }
+
   safeCancelSpeech();
 
   // تنظيف النص من رموز Markdown قبل النطق لتفادي قراءة الرموز حرفياً
@@ -1108,6 +1120,7 @@ class NativeSpeechRecognitionShim {
     if (msg.includes('permission') || msg.includes('denied')) return 'not-allowed';
     if (msg.includes('no match') || msg.includes('empty') || msg.includes('no speech')) return 'no-speech';
     if (msg.includes('busy') || msg.includes('already')) return 'aborted';
+    if (msg.includes('not available') || msg.includes('no service')) return 'service-not-available';
 
     // إذا كان الخطأ غير معروف، نعيد 'network' كافتراضي مع تسجيل التفاصيل
     return 'network';
@@ -1178,7 +1191,6 @@ const SpeechRecognition = IS_NATIVE_APP
 let recognition = null;
 let isRecording = false;
 
-// ترجمة أكواد أخطاء SpeechRecognition إلى رسائل عربية واضحة للمستخدم
 function getSpeechErrorMessage(errorCode) {
   switch (errorCode) {
     case 'not-allowed':
@@ -1188,8 +1200,10 @@ function getSpeechErrorMessage(errorCode) {
       return 'لم أسمع أي صوت، حاولي التحدث بوضوح 🎙️';
     case 'audio-capture':
       return 'تعذّر العثور على ميكروفون مفعل 🎙️';
+    case 'service-not-available':
+      return 'خدمة التعرف الصوتي غير متوفرة. تأكدي من تثبيت وتفعيل تطبيق (Google) على هاتفك 🎙️';
     case 'network':
-      return 'خدمة التعرف الصوتي تواجه مشكلة حالياً. تأكدي من تحديث تطبيق (Google) على هاتفك أو جربي الكتابة 🌐';
+      return 'خدمة التعرف الصوتي تواجه مشكلة حالياً. تأكدي من الاتصال بالإنترنت أو جربي الكتابة 🌐';
     default:
       return 'حدث خطأ في التعرف على الصوت، يرجى المحاولة مرة أخرى 🎙️';
   }
@@ -1411,8 +1425,8 @@ function startCall() {
   callMicToggleBtn.innerHTML = '<i data-lucide="mic"></i>';
 
   // إظهار واجهة الاتصال فوراً وضمان الـ z-index
+  callOverlay.classList.add('visible');
   callOverlay.classList.remove('hidden');
-  callOverlay.style.setProperty('display', 'flex', 'important');
   setCallStatus('جاري بدء الاتصال... 🌸', 'idle');
 
   refreshIcons();
@@ -1446,8 +1460,8 @@ function endCall() {
     }
   }
 
+  callOverlay.classList.remove('visible');
   callOverlay.classList.add('hidden');
-  callOverlay.style.setProperty('display', 'none', 'important');
   console.log('☎️ تم إنهاء المكالمة بنجاح.');
 }
 
