@@ -100,10 +100,28 @@ if (document.readyState === 'loading') {
 const API_BASE_URL = IS_NATIVE_APP ? PRODUCTION_SERVER_URL : '';
 
 async function wakeupServer() {
+  // إظهار تنبيه "جاري الاتصال" للمستخدم ليعرف أن السيرفر يستيقظ
+  const banner = document.getElementById('connectionBanner');
+  const bannerText = document.getElementById('connectionBannerText');
+
+  if (banner && bannerText) {
+    bannerText.textContent = 'جاري إيقاظ ريم... قد يستغرق الأمر لحظات في المرة الأولى ⏳';
+    banner.classList.remove('hidden');
+  }
+
   try {
-    await fetch(`${API_BASE_URL}/api/reset`, { method: 'POST' });
+    const res = await fetch(`${API_BASE_URL}/api/reset`, { method: 'POST' });
+    if (res.ok) {
+      console.log('✅ تم إيقاظ السيرفر بنجاح.');
+      if (banner) banner.classList.add('hidden');
+
+      // إعداد "نبضات قلب" كل 10 دقائق لمنع السيرفر من النوم طالما التطبيق مفتوح
+      setInterval(() => {
+        fetch(`${API_BASE_URL}/api/reset`, { method: 'POST' }).catch(() => {});
+      }, 10 * 60 * 1000);
+    }
   } catch (err) {
-    console.warn('السيرفر قد يكون نائماً.');
+    console.warn('⚠️ السيرفر لا يزال يستيقظ أو هناك مشكلة في الاتصال.');
   }
 }
 
